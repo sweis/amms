@@ -84,7 +84,6 @@ def main():
     trips_by_period = getTotalByPeriod(metrics, flow=False)
     total_trip_volume = sum(trips_by_period.values())
     sparkline("Trip Volume", metrics.cycle_length, trips_by_period)
-    print()
     flows_by_period = getTotalByPeriod(metrics, flow=True)
     total_flows = sum(flows_by_period.values())
     sparkline("Flows", metrics.cycle_length, flows_by_period)

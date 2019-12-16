@@ -101,32 +101,42 @@ $ python3 pbftojson.py sampledata/tiny-trips.pbf
 `demostats` is a basic demonstration of using the AMMS PBF file to generate statistics and visualize them.
 
 ```
-$ Period: 3600 seconds Cycle length: 24
-Daily trips: 417
-Trips by period    Min:      8     Ave:     17     Max:     26
-▄█▄▄▄▂▄▃▄▄▃▅▇▁▅▇▄▄▃▆▆▅▇▆
-Average distance   Min:    825 M   Ave:   1283 M   Max:   1789 M
-▄▅█▂▃▄▄▅▅█▅▂▅▆▅▆▃▂▄▄▅▄▆▁
-Average duration   Min:    599 s   Ave:    943 s   Max:   1324 s
-▄▄█▂▃▃▄▅▅█▅▂▅▆▄▆▃▃▃▄▄▅▆▁
-Average speed      Min:   1.29 M/s Ave:   1.36 M/s Max:   1.47 M/s
-▄▅▃▄▅█▂▂▃▅▂▄▅▂▅▄▃▁▅▇▆▁▂▄
+$ python3 demostats.py sampledata/big-trips-24.pbf
+Period: 3600 seconds Cycle length: 24
+Daily trips: 104321
+Trips by period    Min:   4229     Ave:   4347     Max:   4435     Sum: 104321
+▂▆▅█▅▆█▇▇▃▁▆▇▂▆▄▂▇▃▇▄▂▆▆
+Average distance   Min:   1040 M   Ave:   1064 M   Max:   1083 M   Sum:  25543
+▄▆▃▇▅▄▆▄▄▅█▅▄▄█▄▁▄▇█▃▆▄▇
+Average duration   Min:    739 s   Ave:    758 s   Max:    772 s   Sum:  18184
+▄▅▄▆▅▄▆▄▄▅█▅▄▄█▄▁▄▆▇▄▆▄▇
+Average speed      Min:   1.40 M/s Ave:   1.40 M/s Max:   1.41 M/s Sum:  33.71
+▁▅▁▅▆▄▂▇▆▅▂▃▃▃▅█▅▅▅▅▂▁▄▃
+Trip Volume        Min: 109913     Ave: 112459     Max: 113694     Sum: 2699006
+▄▄▇▇▆▇▆▇▆▆▆▅▆▅█▄▆█▇▇▆▁▆▃
+Flows              Min:   4229     Ave:   4347     Max:   4435     Sum: 104321
+▂▆▅█▅▆█▇▇▃▁▆▇▂▆▄▂▇▃▇▄▂▆▆
 
 Top Trip Volumes
 Period    Lat       Long      Count
-3         -86.796   36.137    14
-5         -86.773   36.170    14
-6         -86.773   36.170    14
-7         -86.773   36.170    12
-3         -86.792   36.152    11
-4         -86.796   36.137    11
-4         -86.773   36.170    11
-4         -86.775   36.157    10
-7         -86.797   36.135    10
-13        -86.769   36.143    10
+14        -86.777   36.167    2115
+6         -86.777   36.167    2109
+13        -86.777   36.167    2082
+7         -86.777   36.167    2078
+15        -86.777   36.167    2033
+20        -86.777   36.167    2013
+8         -86.777   36.167    2006
+21        -86.777   36.167    2006
+5         -86.777   36.167    1988
+12        -86.777   36.167    1983
 
-Privacy level: 0
-Flows Suppressed: 0.00%
+Privacy Flow Suppression
+Privacy Level       Trip Volume         % Volume Suppressed Flows               % Flows Suppressed
+1                   2699006             0.00                104321              0.00
+2                   2483883             7.97                91186               12.59
+3                   2221598             17.69               75902               27.24
+4                   1938583             28.17               61703               40.85
+5                   1679115             37.79               49594               52.46
 ```
 
 ## Background
