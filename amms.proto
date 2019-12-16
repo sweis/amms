@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+// Aggregate Mobility Metrics Schema
+
+message Metrics {
+  // The time period and cycle length determine how data will be aggregated.
+  // Times will be bucketed by the period and then aggregated on a cycle. For
+  // example, a period of 3600 seconds and a cycle length of 168 will aggregate
+  // same hours of a week together.
+  uint32 period_seconds = 1;
+  uint32 cycle_length = 2;
+
+  // A privacy level which may either be used as a k-anonymity
+  // or l-diversity metric
+  uint32 privacy_level = 3;
+
+  // Maps unique uint32s to freeform strings that identify geographic areas
+  map<uint32, string> geo_ids = 4;
+
+  // Overall time series for trips, distance, and duration
+  map<uint32, uint32> total_trips = 5;
+  map<uint32, float> total_distance = 6;
+  map<uint32, float> total_duration = 7;
+
+  // Maps of hours to geographic IDs for trip volumes, pickups and dropoffs
+  map<uint32, IntMap> trip_volumes = 8;
+  map<uint32, IntMap> pickups = 9;
+  map<uint32, IntMap> dropoffs = 10;
+
+  // Maps of hours to geographic IDs for available cars and on_street
+  // (including) available
+  map<uint32, IntMap> availability = 11;
+  map<uint32, IntMap> on_street = 12;
+
+  // Flows maps hours to pairs of pickup and dropoff geographic IDs
+  // For example:
+  //   flows[hour].data[pickup].data[dropoff]
+  map<uint32, Int2DMap> flows = 13;
+
+  // These are defined because we cannot do nested maps in protobufs.
+  // Otherwise, we'd just do map<uint32, map<uint32, map<uint32, uint32>>>
+  message Int2DMap {
+    map<uint32, IntMap> data = 1;
+  }
+
+  message IntMap {
+    map<uint32, uint32> data = 1;
+  }
+}
