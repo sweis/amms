@@ -7,6 +7,19 @@ class TestPoint:
         self.indices = indices
         self.value = value
 
+TINY_TEST_VECTOR = [
+    TestPoint("geo_ids", [1], "-86.722:36.116"),
+    TestPoint("total_trips", [21], 1),
+    TestPoint("total_distance",[1], 2559.828125),
+    TestPoint("total_duration", [4], 1105.9202880859375),
+    TestPoint("pickups", [4, 34], 1),
+    TestPoint("dropoffs", [12, 33], 1),
+    TestPoint("trip_volumes", [20, 64], 2),
+    TestPoint("flows", [1, 12, 33], 1),
+    TestPoint("availability", [0, 78], 5),
+    TestPoint("on_street", [0, 79], 1),
+]
+
 TEST_VECTOR_24 = [
     TestPoint("geo_ids", [0], "-86.825:36.133"),
     TestPoint("total_trips", [2], 15),
@@ -74,6 +87,12 @@ class TripMetricsTest(unittest.TestCase):
         )
         self.doTestFields(metrics, TEST_VECTOR_168)
 
+    def test_vehicle_counts(self):
+        metrics = readtrips.metricsFromPBF(
+            input_filename = "sampledata/tiny-trips.pbf",
+            gpsaccuracy = 3
+        )
+        self.doTestFields(metrics, TINY_TEST_VECTOR)
 
     def test_suppression(self):
         metrics = readtrips.metricsFromJSON(

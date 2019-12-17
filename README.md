@@ -1,15 +1,20 @@
 # Aggregated Mobility Metrics Schema
 
 ## Overview
-The Aggregate Mobility Metrics Schema (AMMS) specifies a portable, compact schema for sharing aggregated mobility data with cities. At a high-level, AMMS allows one to define arbitrary geographic zones and aggregate data on an hourly basis by zone. AMMS also supports a privacy level, which may be used as a k-anonymity or l-diversity level to apply to different aggregated metrics.
+The Aggregate Mobility Metrics Schema (AMMS) specifies a portable, compact schema for sharing aggregated mobility data with cities. At a high-level, AMMS allows one to define arbitrary geographic zones and aggregate data by arbitrary time periods and
+cycles by zone. AMMS also supports a privacy level, which may be used as a
+k-anonymity or l-diversity level to apply to different aggregated metrics.
 
 The schema includes:
-* Total trips, distance, & duration by hour
-* Pickups & drop-offs by zone & hour
-* Trip volumes by zone & hour, with arbitrary k-anonymity
-* Flow between pickup and dropoff zones & hour, with arbitrary l-diversity
+* Total trips, distance, & duration by time period
+* Pickups & drop-offs by time period & zone
+* Trip volumes by time period & zone, with arbitrary k-anonymity
+* Flows by time period, pickup, and drop-off zones, with arbitrary l-diversity
+* Optionally, vehicle availability and on-street counts by time period & zone.
 
-AMMS is specified as a Protocol Buffer, which provides a portable binary format supporting major languages and easy conversion to JSON. AMMS is input agnostic and compatible with Mobility Data Specification (MDS) JSON input. An AMMS protocol buffer output is typical than 1% of the size of the raw MDS input data.
+AMMS is specified as a Protocol Buffer, which provides a portable binary format supporting major languages and easy conversion to JSON. AMMS is input agnostic
+and compatible with Mobility Data Specification (MDS) JSON input. An AMMS
+protocol buffer output is typical than 1% of the size of the raw MDS input data.
 
 ## Building Python Sample Code
 
@@ -23,24 +28,38 @@ AMMS is specified as a Protocol Buffer, which provides a portable binary format 
 
 ### readtrips.py
 
-`readtrips` will read a file in either JSON, CSV, or PBF (protobuf) format and output as PBF. It will optionally suppress data using the given `privacy` parameter. Currently, `readtrips` will map GPS coordinates to zones by rounding coordinates to 3 decimal digits.
+`readtrips` will read a trips file in either JSON, CSV, or PBF (protobuf) format
+and output as a PBF file. It will optionally suppress data using the given
+`--privacy` parameter.
+
+Currently, `readtrips` will map GPS coordinates
+to zones by rounding coordinates to 3 decimal digits by default, which is
+configurable by the `--accuracy` parameter.
+
+`readtrips` also supports optionally reading an MDS vehicle change file, which
+is specified by the `--changes_filename` flag. See `sampledata/tiny-{trips, changes}.json` as example inputs and `sampledata/tiny-trips.pbf` as a sample
+output.
 
 #### Usage
 ```
 $ python3 readtrips.py -h
-usage: readtrips.py [-h] [--period PERIOD] [--cycle_length CYCLE_LENGTH]
+usage: readtrips.py [-h] [--changes_filename CHANGES_FILENAME]
+                    [--period PERIOD] [--cycle_length CYCLE_LENGTH]
                     [--output_filename OUTPUT_FILENAME] [--suppress]
                     [--suppress_prefix SUPPRESS_PREFIX] [--accuracy ACCURACY]
                     [--privacy PRIVACY]
-                    input_filename
+                    input_trips
 
 Aggregate MDS trip data into a Metrics protocol buffer
 
 positional arguments:
-  input_filename        Input filname. Must end with .json, .csv., or .pbf
+  input_trips           Input trips filname. Must end with .json, .csv., or
+                        .pbf
 
 optional arguments:
   -h, --help            show this help message and exit
+  --changes_filename CHANGES_FILENAME
+                        Input file with vehicle changes. Must end with .json
   --period PERIOD       Time period in seconds. Hour by default.
   --cycle_length CYCLE_LENGTH
                         The number of periods in a cycle. If provided, periods
