@@ -101,6 +101,54 @@ def metricsFromJSON(input_filename, period, cycle_length, gpsaccuracy):
     logging.debug("Read {} trips".format(count))
     return metrics
 
+def parseChanges(metrics, changes_filename, period, cycle_length, gpsaccuracy):
+    if not metrics:
+        metrics = Metrics()
+        metrics.period_seconds = period
+        metrics.cycle_length = cycle_length
+    count = 0
+    availability_map = {}
+    onstreet_map = {}
+    inverse_geo_ids = dict([(x[1], x[0]) for x in metrics.geo_ids.items()])
+    with open(changes_filename) as f:
+        for change in map(json.loads, f.readlines()):
+            count += 1
+            event_period = getPeriod(change['event_time'], metrics.period_seconds, metrics.cycle_length)
+            vehicle_id = change['vehicle_id']
+            event_type = change['event_type']
+            (lat, long) = map(float, change['event_location']['geometry']['coordinates'])
+            geo_id = latLongToZone(
+                metrics.geo_ids,
+                lat,
+                long,
+                gpsaccuracy,
+                inverse_geo_ids)
+
+            if event_period not in onstreet_map:
+                onstreet_map[event_period] = {}
+            if geo_id not in onstreet_map[event_period]:
+                onstreet_map[event_period][geo_id] = {}
+            if vehicle_id not in onstreet_map[event_period][geo_id]:
+                onstreet_map[event_period][geo_id][vehicle_id] = 0
+            onstreet_map[event_period][geo_id][vehicle_id] += 1
+
+            if event_type == "available":
+                if event_period not in availability_map:
+                    availability_map[event_period] = {}
+                if geo_id not in availability_map[event_period]:
+                    availability_map[event_period][geo_id] = {}
+                if vehicle_id not in availability_map[event_period][geo_id]:
+                    availability_map[event_period][geo_id][vehicle_id] = 0
+                availability_map[event_period][geo_id][vehicle_id] += 1
+    for period in availability_map:
+        for geo_id in availability_map[period]:
+            metrics.availability[period].data[geo_id] = len(availability_map[period][geo_id])
+    for period in onstreet_map:
+        for geo_id in onstreet_map[period]:
+            metrics.on_street[period].data[geo_id] = len(onstreet_map[period][geo_id])
+    logging.debug("Read {} vehicle changes".format(count))
+    return metrics
+
 def outputFile(metrics, output_filename):
     logging.debug("Writing to {}".format(output_filename))
     with open(output_filename, "wb") as output:
@@ -192,9 +240,12 @@ def getParser():
     parser = argparse.ArgumentParser(
         description='Aggregate MDS trip data into a Metrics protocol buffer')
     parser.add_argument(
-        'input_filename',
-        help='Input filname. Must end with .json, .csv., or .pbf'
+        'input_trips',
+        help='Input trips filname. Must end with .json, .csv., or .pbf'
     )
+    parser.add_argument(
+        '--changes_filename',
+        help='Input file with vehicle changes. Must end with .json')
     parser.add_argument(
         '--period',
         default=3600,
@@ -239,17 +290,18 @@ def main():
     parser = getParser()
     args = parser.parse_args()
 
-    if args.input_filename.endswith('pbf'):
+    if args.input_trips.endswith('pbf'):
         parsingFunction = metricsFromPBF
-    elif args.input_filename.endswith('csv'):
+    elif args.input_trips.endswith('csv'):
         parsingFunction = metricsFromCSV
-    elif args.input_filename.endswith('json'):
+    elif args.input_trips.endswith('json'):
         parsingFunction = metricsFromJSON
 
-    logging.debug("Reading {}".format(args.input_filename))
-    metrics = parsingFunction(args.input_filename, args.period, args.cycle_length, args.accuracy)
+    logging.debug("Reading {}".format(args.input_trips))
+    metrics = parsingFunction(args.input_trips, args.period, args.cycle_length, args.accuracy)
+    if args.changes_filename:
+        metrics = parseChanges(metrics, args.changes_filename, args.period, args.cycle_length, args.accuracy)
     outputFile(metrics, args.output_filename)
-
     if args.suppress:
         suppressed = suppress(metrics, args.privacy)
         suppressed_filename = "{}-{}.pbf".format(args.suppress_prefix, args.privacy)
