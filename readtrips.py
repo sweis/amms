@@ -32,50 +32,23 @@ def metricsFromPBF(input_filename, period=None, cycle_length=None, gpsaccuracy=N
         metrics.ParseFromString(pbfile.read())
         return metrics
 
-def metricsFromCSV(input_filename, period, cycle_length, gpsaccuracy):
-    df = pd.read_csv(input_filename,
-        sep='\\s*,\\s*',
-        engine='python',
-        parse_dates=[['pickup_date', 'pickup_time'],['dropoff_date', 'dropoff_time']])
-    metrics = Metrics()
-    metrics.period_seconds = period
-    metrics.cycle_length = cycle_length
-    count = 0
-    inverse_geo_ids = {}
-    for k, v in df.iterrows():
-        start_time = v['pickup_date_pickup_time']
-        end_time = v['dropoff_date_dropoff_time']
-        start_period = getPeriod(start_time.timestamp(), metrics.period_seconds, metrics.cycle_length)
-        end_period = getPeriod(end_time.timestamp(), metrics.period_seconds, metrics.cycle_length)
-        metrics.total_trips[start_period] += 1
-        metrics.total_duration[start_period] += pd.Timedelta(end_time - start_time).seconds
-        pickup = latLongToZone(metrics.geo_ids,
-            v['pickup_lat'],
-            v['pickup_long'],
-            gpsaccuracy,
-            inverse_geo_ids)
-        dropoff = latLongToZone(metrics.geo_ids,
-            v['dropoff_lat'],
-            v['dropoff_long'],
-            gpsaccuracy,
-            inverse_geo_ids)
-        metrics.pickups[start_period].data[pickup] += 1
-        metrics.dropoffs[end_period].data[dropoff] += 1
-        metrics.flows[start_period].data[pickup].data[dropoff] += 1
-        count += 1
-    logging.debug("Read {} trips".format(count))
-    return metrics
-
 def metricsFromJSON(input_filename, period, cycle_length, gpsaccuracy):
     metrics = Metrics()
     metrics.period_seconds = period
     metrics.cycle_length = cycle_length
+    # We'll need to keep track of the earliest and latest times seen
+    earliest_time = sys.maxsize
+    latest_time = 0
+
     count = 0
     inverse_geo_ids = {}
     with open(input_filename) as f:
         for trip in map(json.loads, f.readlines()):
             count += 1
-            start_period = getPeriod(trip['start_time'], metrics.period_seconds, metrics.cycle_length)
+            timestamp = trip['start_time']
+            earliest_time = min(timestamp, earliest_time)
+            latest_time = max(timestamp, latest_time)
+            start_period = getPeriod(timestamp, metrics.period_seconds, metrics.cycle_length)
             duration = float(trip['trip_duration'])
             distance = float(trip['trip_distance'])
             metrics.total_trips[start_period] += 1
@@ -84,7 +57,10 @@ def metricsFromJSON(input_filename, period, cycle_length, gpsaccuracy):
             pickup = None
             dropoff = None
             for route_point in trip['route']['features']:
-                period = getPeriod(route_point['properties']['timestamp'], metrics.period_seconds, metrics.cycle_length)
+                timestamp = route_point['properties']['timestamp']
+                period = getPeriod(timestamp, metrics.period_seconds, metrics.cycle_length)
+                earliest_time = min(timestamp, earliest_time)
+                latest_time = max(timestamp, latest_time)
                 (lat, long) = map(float, route_point['geometry']['coordinates'])
                 geo_id = latLongToZone(metrics.geo_ids, lat, long, gpsaccuracy, inverse_geo_ids)
                 metrics.trip_volumes[period].data[geo_id] += 1
@@ -98,7 +74,9 @@ def metricsFromJSON(input_filename, period, cycle_length, gpsaccuracy):
             metrics.dropoffs[end_period].data[dropoff] += 1
             # Flows will be indexed by their start period
             metrics.flows[start_period].data[pickup].data[dropoff] += 1
-    logging.debug("Read {} trips".format(count))
+    metrics.start_time = earliest_time
+    metrics.end_time = latest_time
+    logging.debug("Read {} trips. Start {}, end {}".format(count, earliest_time, latest_time))
     return metrics
 
 def parseChanges(metrics, changes_filename, period, cycle_length, gpsaccuracy):
@@ -106,6 +84,11 @@ def parseChanges(metrics, changes_filename, period, cycle_length, gpsaccuracy):
         metrics = Metrics()
         metrics.period_seconds = period
         metrics.cycle_length = cycle_length
+        earliest_time = sys.maxsize
+        latest_time = 0
+    else:
+        earliest_time = metrics.start_time
+        latest_time = metrics.end_time
     count = 0
     availability_map = {}
     onstreet_map = {}
@@ -113,7 +96,10 @@ def parseChanges(metrics, changes_filename, period, cycle_length, gpsaccuracy):
     with open(changes_filename) as f:
         for change in map(json.loads, f.readlines()):
             count += 1
-            event_period = getPeriod(change['event_time'], metrics.period_seconds, metrics.cycle_length)
+            timestamp = change['event_time']
+            event_period = getPeriod(timestamp, metrics.period_seconds, metrics.cycle_length)
+            earliest_time = min(timestamp, earliest_time)
+            latest_time = max(timestamp, latest_time)
             vehicle_id = change['vehicle_id']
             event_type = change['event_type']
             (lat, long) = map(float, change['event_location']['geometry']['coordinates'])
@@ -146,7 +132,9 @@ def parseChanges(metrics, changes_filename, period, cycle_length, gpsaccuracy):
     for period in onstreet_map:
         for geo_id in onstreet_map[period]:
             metrics.on_street[period].data[geo_id] = len(onstreet_map[period][geo_id])
-    logging.debug("Read {} vehicle changes".format(count))
+    logging.debug("Read {} vehicle changes. Start {}, end {}".format(count, earliest_time, latest_time))
+    metrics.start_time = earliest_time
+    metrics.end_time = latest_time
     return metrics
 
 def outputFile(metrics, output_filename):
@@ -181,6 +169,9 @@ def graphToEdgeSet(graph, reverse=False):
                 edges.append((source, dest))
     return set(edges)
 
+# To apply l-diversity, we want to take a graph of trip flows and remove any
+# nodes with less than l in- or out-edges. This the trip flow graph based on
+# the in- and out-degrees and iteratively filters out all <l degree nodes.
 def decomposeTrips(pickups, privacy_level):
     # Set up edge adjacency lists
     outbound = {}
@@ -199,9 +190,14 @@ def decomposeTrips(pickups, privacy_level):
     out_degrees = {}
     in_degrees = {}
     degree, out_removed, in_removed = 1, 0, 0
+    # This implements the k-coreness algorithm from Matula & Beck '83.
+    # It effectively removes all the nodes of a given degree and stores them in
+    # the {ont, in}_degrees map. That map is the decomposition of the graph.
     for degree in range(1, privacy_level):
         out_removed = decompose(degree, outbound, inbound, out_degrees)
         in_removed = decompose(degree, inbound, outbound, in_degrees)
+        # If nothing is removed, there are no nodes left with the given degree
+        # or higher.
         if out_removed == 0 and in_removed == 0:
             break
         degree += 1
@@ -216,6 +212,8 @@ def suppress(metrics, privacy_level):
     suppressed_metrics = Metrics()
     suppressed_metrics.MergeFrom(metrics)
     suppressed_metrics.privacy_level = privacy_level
+    suppressed_metrics.trip_volume_suppressed = 0
+    suppressed_metrics.flows_suppressed = 0
     suppressed_metrics.ClearField("trip_volumes")
     suppressed_metrics.ClearField("flows")
 
@@ -226,14 +224,24 @@ def suppress(metrics, privacy_level):
             count = metrics.trip_volumes[period].data[geo_id]
             if count >= suppressed_metrics.privacy_level:
                 suppressed_metrics.trip_volumes[period].data[geo_id] = count
+            else:
+                suppressed_metrics.trip_volume_suppressed += count
 
     # Enforce l-diversity of flows
+    total_flows = 0
+    unsuppressed_flows = 0
     for period in metrics.flows:
         pickups = metrics.flows[period].data
-        trips = decomposeTrips(metrics.flows[period].data, privacy_level)
+        for pickup in pickups:
+            for dropoff in pickups[pickup].data:
+                total_flows += pickups[pickup].data[dropoff]
+
+        trips = decomposeTrips(pickups, privacy_level)
         # Copy over flow data from the suppressed pickup/dropoff pairs
         for (pickup, dropoff) in trips:
             suppressed_metrics.flows[period].data[pickup].data[dropoff] = pickups[pickup].data[dropoff]
+            unsuppressed_flows += pickups[pickup].data[dropoff]
+    suppressed_metrics.flows_suppressed = total_flows - unsuppressed_flows
     return suppressed_metrics
 
 def getParser():
@@ -241,19 +249,19 @@ def getParser():
         description='Aggregate MDS trip data into a Metrics protocol buffer')
     parser.add_argument(
         'input_trips',
-        help='Input trips filname. Must end with .json, .csv., or .pbf'
+        help='Input trips filname. Must end with .json or .pbf'
     )
     parser.add_argument(
-        '--changes_filename',
+        '-cf', '--changes_filename',
         help='Input file with vehicle changes. Must end with .json')
     parser.add_argument(
-        '--period',
+        '-per', '--period',
         default=3600,
         type=int,
         help='Time period in seconds. Hour by default.'
     )
     parser.add_argument(
-        '--cycle_length',
+        '-c', '--cycle_length',
         default=168,
         type=int,
         help='The number of periods in a cycle. If provided, periods '
@@ -261,25 +269,25 @@ def getParser():
              'be tallied.'
     )
     parser.add_argument(
-        '--output_filename',
+        '-o', '--output_filename',
         default="output.pbf",
         help='Output filename')
     parser.add_argument(
-        '--suppress',
+        '-s', '--suppress',
         action='store_true',
         default=True,
         help='Output suppressed flows subject to k-anonymity')
     parser.add_argument(
-        '--suppress_prefix',
+        '-sp', '--suppress_prefix',
         default="suppress",
         help='Output filename prefix for suppressed flows. [prefix]-[k].pbf')
     parser.add_argument(
-        '--accuracy',
+        '-a', '--accuracy',
         default=3,
         type=int,
         help='Decimal digits of GPS accuracy used for zones')
     parser.add_argument(
-        '--privacy',
+        '-p', '--privacy',
         default=5,
         type=int,
         help='k-anonymity or l-diversity for suppressed output')
@@ -292,8 +300,6 @@ def main():
 
     if args.input_trips.endswith('pbf'):
         parsingFunction = metricsFromPBF
-    elif args.input_trips.endswith('csv'):
-        parsingFunction = metricsFromCSV
     elif args.input_trips.endswith('json'):
         parsingFunction = metricsFromJSON
 

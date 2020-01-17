@@ -1,4 +1,5 @@
 from pb.amms_pb2 import Metrics
+from datetime import datetime as dt
 import argparse
 import google.protobuf.json_format as json_format
 import readtrips
@@ -56,19 +57,31 @@ def getTotalByPeriod(metrics, field_name):
 
 def printSparkLines(metrics):
     daily_trips = sum(metrics.total_trips.values())
-    print("Period: {} seconds Cycle length: {}".format(metrics.period_seconds, metrics.cycle_length))
-    print("Daily trips: {}".format(daily_trips))
+    trip_volume_by_period = getTotalByPeriod(metrics, 'trip_volumes')
+    flows_by_period = getTotalByPeriod(metrics, 'flows')
+    available_by_period = getTotalByPeriod(metrics, 'availability')
+    on_street_by_period = getTotalByPeriod(metrics, 'on_street')
+
+    print("Total trips: {}".format(daily_trips))
+    print("Start: {}".format(dt.fromtimestamp(metrics.start_time)))
+    print("End: {}".format(dt.fromtimestamp(metrics.end_time)))
+    print("Period: {} seconds".format(metrics.period_seconds))
+    print("Cycle length: {}".format(metrics.cycle_length))
+
+    trip_volume_by_period = getTotalByPeriod(metrics, 'trip_volumes')
+    total_trip_volume = sum(trip_volume_by_period.values())
+    flows_by_period = getTotalByPeriod(metrics, 'flows')
+    total_flows = sum(flows_by_period.values())
+    print("Privacy: {}".format(metrics.privacy_level))
+    print("Volume Suppressed: {}\tTotal Volume: {}".format(metrics.trip_volume_suppressed, total_trip_volume))
+    print("Flow Suppressed: {}\tTotal Flows: {}".format(metrics.flows_suppressed, total_flows))
     sparkline("Trips by period", metrics.cycle_length, metrics.total_trips)
     sparkline("Average distance", metrics.cycle_length, metrics.total_distance, metrics.total_trips, units="M")
     sparkline("Average duration", metrics.cycle_length, metrics.total_duration, metrics.total_trips, units="s")
     sparkline("Average speed", metrics.cycle_length, metrics.total_distance, metrics.total_duration, units="M/s", precision=2)
-    trips_by_period = getTotalByPeriod(metrics, 'trip_volumes')
-    sparkline("Trip Volume", metrics.cycle_length, trips_by_period)
-    flows_by_period = getTotalByPeriod(metrics, 'flows')
+    sparkline("Trip Volume", metrics.cycle_length, trip_volume_by_period)
     sparkline("Flows", metrics.cycle_length, flows_by_period)
-    available_by_period = getTotalByPeriod(metrics, 'availability')
     sparkline("Availability", metrics.cycle_length, available_by_period)
-    on_street_by_period = getTotalByPeriod(metrics, 'on_street')
     sparkline("On Street", metrics.cycle_length, on_street_by_period)
 
 def printTopTripVolumes(metrics):
@@ -82,26 +95,22 @@ def printTopTripVolumes(metrics):
 
 def printPrivacySuppressionStats(metrics, privacy_levels):
     print("Privacy Flow Suppression")
-    print("{:<20}{:<20}{:<20}{:<20}{:<20}".format(
-        "Privacy Level", "Trip Volume", "% Volume Suppressed", "Flows", "% Flows Suppressed"))
-    trips_by_period = getTotalByPeriod(metrics, 'trip_volumes')
-    total_trip_volume = sum(trips_by_period.values())
+    print("{:>15}{:>15}{:>8}{:>15}{:>8}".format(
+        "Privacy Level", "Supp. Volume", "%", "Supp. Flows", "%"))
+    trip_volume_by_period = getTotalByPeriod(metrics, 'trip_volumes')
+    total_trip_volume = sum(trip_volume_by_period.values())
     flows_by_period = getTotalByPeriod(metrics, 'flows')
     total_flows = sum(flows_by_period.values())
     for privacy_level in privacy_levels:
         suppressed = readtrips.suppress(metrics, privacy_level)
-        suppressed_flows_by_period = getTotalByPeriod(suppressed, 'trip_volumes')
-        suppressed_volume_by_period = getTotalByPeriod(suppressed, 'flows')
-        total_suppressed_flows = sum(suppressed_flows_by_period.values())
-        total_suppressed_volume = sum(suppressed_volume_by_period.values())
-        percent_flows_suppressed = 100*(1.0-(total_suppressed_flows/total_flows)) if total_flows else 0
-        percent_volume_suppressed = 100*(1.0-(total_suppressed_volume/total_trip_volume)) if total_trip_volume else 0
+        percent_volume_suppressed = 100*(float(suppressed.trip_volume_suppressed)/total_trip_volume) if total_trip_volume else 0
+        percent_flows_suppressed = 100*(float(suppressed.flows_suppressed)/total_flows) if total_flows else 0
 
-        print("{:<20}{:<20}{:<20.2f}{:<20}{:<20.2f}".format(
+        print("{:>15}{:>15}{:>8.2f}{:>15}{:>8.2f}".format(
             privacy_level,
-            total_suppressed_volume,
+            suppressed.trip_volume_suppressed,
             percent_volume_suppressed,
-            total_suppressed_flows,
+            suppressed.flows_suppressed,
             percent_flows_suppressed)
         )
 
@@ -116,7 +125,6 @@ def main():
     metrics = Metrics()
     with open(args.input_filename, 'rb') as pbfile:
         metrics.ParseFromString(pbfile.read())
-
     printSparkLines(metrics)
     print()
     printTopTripVolumes(metrics)
