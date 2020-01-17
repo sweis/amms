@@ -43,36 +43,36 @@ output.
 #### Usage
 ```
 $ python3 readtrips.py -h
-usage: readtrips.py [-h] [--changes_filename CHANGES_FILENAME]
-                    [--period PERIOD] [--cycle_length CYCLE_LENGTH]
-                    [--output_filename OUTPUT_FILENAME] [--suppress]
-                    [--suppress_prefix SUPPRESS_PREFIX] [--accuracy ACCURACY]
-                    [--privacy PRIVACY]
+usage: readtrips.py [-h] [-cf CHANGES_FILENAME] [-per PERIOD]
+                    [-c CYCLE_LENGTH] [-o OUTPUT_FILENAME] [-s]
+                    [-sp SUPPRESS_PREFIX] [-a ACCURACY] [-p PRIVACY]
                     input_trips
 
 Aggregate MDS trip data into a Metrics protocol buffer
 
 positional arguments:
-  input_trips           Input trips filname. Must end with .json, .csv., or
-                        .pbf
+  input_trips           Input trips filname. Must end with .json or .pbf
 
 optional arguments:
   -h, --help            show this help message and exit
-  --changes_filename CHANGES_FILENAME
+  -cf CHANGES_FILENAME, --changes_filename CHANGES_FILENAME
                         Input file with vehicle changes. Must end with .json
-  --period PERIOD       Time period in seconds. Hour by default.
-  --cycle_length CYCLE_LENGTH
+  -per PERIOD, --period PERIOD
+                        Time period in seconds. Hour by default.
+  -c CYCLE_LENGTH, --cycle_length CYCLE_LENGTH
                         The number of periods in a cycle. If provided, periods
                         will be aggregated on a cycle, e.g. the same hour of a
                         day will be tallied.
-  --output_filename OUTPUT_FILENAME
+  -o OUTPUT_FILENAME, --output_filename OUTPUT_FILENAME
                         Output filename
-  --suppress            Output suppressed flows subject to k-anonymity
-  --suppress_prefix SUPPRESS_PREFIX
+  -s, --suppress        Output suppressed flows subject to k-anonymity
+  -sp SUPPRESS_PREFIX, --suppress_prefix SUPPRESS_PREFIX
                         Output filename prefix for suppressed flows.
                         [prefix]-[k].pbf
-  --accuracy ACCURACY   Decimal digits of GPS accuracy used for zones
-  --privacy PRIVACY     k-anonymity or l-diversity for suppressed output
+  -a ACCURACY, --accuracy ACCURACY
+                        Decimal digits of GPS accuracy used for zones
+  -p PRIVACY, --privacy PRIVACY
+                        k-anonymity or l-diversity for suppressed output
 ```
 
 #### Example Run
@@ -121,8 +121,14 @@ $ python3 pbftojson.py sampledata/tiny-trips.pbf
 
 ```
 $ python3 demostats.py sampledata/big-trips-24.pbf
-Period: 3600 seconds Cycle length: 24
-Daily trips: 104321
+Total trips: 104321
+Start: 1970-01-01 16:26:40
+End: 1971-11-26 17:40:00
+Period: 3600 seconds
+Cycle length: 24
+Privacy: 0
+Volume Suppressed: 0	Total Volume: 2860121
+Flow Suppressed: 0	Total Flows: 104321
 Trips by period    Min:   4229     Ave:   4347     Max:   4435     Sum: 104321
 ▂▆▅█▅▆█▇▇▃▁▆▇▂▆▄▂▇▃▇▄▂▆▆
 Average distance   Min:   1040 M   Ave:   1064 M   Max:   1083 M   Sum:  25543
@@ -131,8 +137,8 @@ Average duration   Min:    739 s   Ave:    758 s   Max:    772 s   Sum:  18184
 ▄▅▄▆▅▄▆▄▄▅█▅▄▄█▄▁▄▆▇▄▆▄▇
 Average speed      Min:   1.40 M/s Ave:   1.40 M/s Max:   1.41 M/s Sum:  33.71
 ▁▅▁▅▆▄▂▇▆▅▂▃▃▃▅█▅▅▅▅▂▁▄▃
-Trip Volume        Min: 109913     Ave: 112459     Max: 113694     Sum: 2699006
-▄▄▇▇▆▇▆▇▆▆▆▅▆▅█▄▆█▇▇▆▁▆▃
+Trip Volume        Min: 118409     Ave: 119172     Max: 119761     Sum: 2860121
+▂▃▆▇▆▅▆▇▇█▅▅▇▅▆▄▅▆▄▆▃▄▃▁
 Flows              Min:   4229     Ave:   4347     Max:   4435     Sum: 104321
 ▂▆▅█▅▆█▇▇▃▁▆▇▂▆▄▂▇▃▇▄▂▆▆
 
@@ -150,12 +156,12 @@ Period    Lat       Long      Count
 12        -86.777   36.167    1983
 
 Privacy Flow Suppression
-Privacy Level       Trip Volume         % Volume Suppressed Flows               % Flows Suppressed
-1                   2699006             0.00                104321              0.00
-2                   2483883             7.97                91186               12.59
-3                   2221598             17.69               75902               27.24
-4                   1938583             28.17               61703               40.85
-5                   1679115             37.79               49594               52.46
+  Privacy Level   Supp. Volume       %    Supp. Flows       %
+              1              0    0.00              0    0.00
+              2           3094    0.11          13135   12.59
+              3           7038    0.25          28419   27.24
+              4          11352    0.40          42618   40.85
+              5          15988    0.56          54727   52.46
 ```
 
 ## Background
