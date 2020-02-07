@@ -86,8 +86,8 @@ def main():
     if args.flow:
         outfilename = "{}-flow.csv".format(args.output)
         log.info("Outputting {}".format(outfilename))
-        with open(outfilename, 'w') as volumecsv:
-            outputVolumes(metrics, volumecsv)
+        with open(outfilename, 'w') as flowcsv:
+            outputFlows(metrics, flowcsv)
 
 if __name__ == "__main__":
     sys.exit(main())
