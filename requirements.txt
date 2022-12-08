@@ -1,0 +1,9 @@
+attrs==22.1.0
+jsonschema==4.17.3
+numpy==1.23.5
+pandas==1.5.2
+protobuf==3.20.0
+pyrsistent==0.19.2
+python-dateutil==2.8.2
+pytz==2022.6
+six==1.16.0
